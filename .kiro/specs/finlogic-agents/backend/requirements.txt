@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+python-dotenv
+boto3
+google-generativeai
+pydantic
+pydantic-settings
+python-multipart
+pypdf2
+pillow
+sqlalchemy
