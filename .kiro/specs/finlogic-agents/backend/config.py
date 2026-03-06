@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     dynamo_nbfcs_table: str = os.getenv("DYNAMO_NBFCS_TABLE", "")
     dynamo_statements_table: str = os.getenv("DYNAMO_STATEMENTS_TABLE", "")
     dynamo_matches_table: str = os.getenv("DYNAMO_MATCHES_TABLE", "")
+    dynamo_invoices_table: str = os.getenv("DYNAMO_INVOICES_TABLE", "")
 
     # Google API
     google_api_key: str = os.getenv("GOOGLE_API_KEY", "")
@@ -43,5 +44,6 @@ DYNAMO_KIRANAS_TABLE = settings.dynamo_kiranas_table
 DYNAMO_NBFCS_TABLE = settings.dynamo_nbfcs_table
 DYNAMO_STATEMENTS_TABLE = settings.dynamo_statements_table
 DYNAMO_MATCHES_TABLE = settings.dynamo_matches_table
+DYNAMO_INVOICES_TABLE = settings.dynamo_invoices_table
 GOOGLE_API_KEY = settings.google_api_key
 APP_ENV = settings.app_env
