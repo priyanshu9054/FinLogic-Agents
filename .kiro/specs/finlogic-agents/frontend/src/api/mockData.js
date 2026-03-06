@@ -1,0 +1,62 @@
+export const mockKiranas = [
+    {
+        kirana_id: 'kirana-001',
+        store_name: 'Ravi Kirana Store',
+        location: 'Mumbai',
+        credit_score: 750,
+        risk_level: 'Low',
+        loan_eligible_amount: 500000,
+        verified: true,
+    },
+    {
+        kirana_id: 'kirana-002',
+        store_name: 'Sharma General Store',
+        location: 'Delhi',
+        credit_score: 580,
+        risk_level: 'Medium',
+        loan_eligible_amount: 200000,
+        verified: true,
+    },
+    {
+        kirana_id: 'kirana-003',
+        store_name: 'Lakshmi Traders',
+        location: 'Bangalore',
+        credit_score: 420,
+        risk_level: 'High',
+        loan_eligible_amount: 50000,
+        verified: true,
+    },
+];
+
+export const mockNBFCs = [
+    {
+        nbfc_id: 'nbfc-001',
+        nbfc_name: 'QuickCapital NBFC',
+        min_credit_score: 700,
+        max_loan_amount: 1000000,
+        min_loan_amount: 300000,
+        interest_rate: 14.5,
+        tenure_months: 24,
+        preferred_regions: ['Mumbai', 'Pune'],
+    },
+    {
+        nbfc_id: 'nbfc-002',
+        nbfc_name: 'GrowMore Finance',
+        min_credit_score: 500,
+        max_loan_amount: 500000,
+        min_loan_amount: 100000,
+        interest_rate: 18,
+        tenure_months: 24,
+        preferred_regions: ['Mumbai', 'Delhi', 'Bangalore'],
+    },
+    {
+        nbfc_id: 'nbfc-003',
+        nbfc_name: 'MicroLend NBFC',
+        min_credit_score: 350,
+        max_loan_amount: 100000,
+        min_loan_amount: 25000,
+        interest_rate: 22,
+        tenure_months: 12,
+        preferred_regions: ['Delhi', 'Bangalore', 'Chennai'],
+    },
+];
