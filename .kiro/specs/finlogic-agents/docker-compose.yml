@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_REGION=${AWS_REGION}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - DYNAMO_KIRANAS_TABLE=${DYNAMO_KIRANAS_TABLE}
+      - DYNAMO_NBFCS_TABLE=${DYNAMO_NBFCS_TABLE}
+      - DYNAMO_STATEMENTS_TABLE=${DYNAMO_STATEMENTS_TABLE}
+      - DYNAMO_INVOICES_TABLE=${DYNAMO_INVOICES_TABLE}
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
