@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from services.matching_service import MatchingService
 
-router = APIRouter(prefix="/matching", tags=["Matching"])
+router = APIRouter(prefix="/api/matching", tags=["Matching"])
 
 
 @router.get("/nbfcs/{kirana_id}")

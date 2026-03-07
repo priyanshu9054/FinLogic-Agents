@@ -127,25 +127,40 @@ def _extract_json(text: str) -> dict:
 
     Strategy:
       1. Strip markdown fences
-      2. Find the outermost { ... } block
+      2. Find the outermost { ... } or [ ... ] block
       3. Try direct parse
       4. If that fails, use json-repair to fix common issues
          (trailing commas, single quotes, truncated arrays)
+      5. If result is a list, wrap it in a dict
       Requires: pip install json-repair
     """
     # Step 1 — strip fences
     text = re.sub(r"```(?:json)?", "", text).strip()
     text = text.replace("```", "").strip()
 
-    # Step 2 — find outermost JSON object
-    start = text.find("{")
-    end = text.rfind("}")
-    if start != -1 and end != -1 and end > start:
-        text = text[start : end + 1]
+    # Step 2 — find outermost JSON object or array
+    start_obj = text.find("{")
+    start_arr = text.find("[")
+    end_obj = text.rfind("}")
+    end_arr = text.rfind("]")
+
+    # Determine if we have an object or array
+    if start_arr != -1 and (start_obj == -1 or start_arr < start_obj):
+        # Array comes first
+        if end_arr != -1 and end_arr > start_arr:
+            text = text[start_arr : end_arr + 1]
+    elif start_obj != -1 and end_obj != -1 and end_obj > start_obj:
+        # Object
+        text = text[start_obj : end_obj + 1]
 
     # Step 3 — direct parse
     try:
-        return json.loads(text)
+        parsed = json.loads(text)
+        # If it's a list, wrap it in a dict
+        if isinstance(parsed, list):
+            logger.info("Parsed result is a list, wrapping in dict")
+            return {"items": parsed}
+        return parsed
     except json.JSONDecodeError as e:
         logger.warning(
             f"Direct JSON parse failed at char {e.pos}: {e.msg} — trying repair"
@@ -159,7 +174,10 @@ def _extract_json(text: str) -> dict:
         if isinstance(repaired, dict):
             logger.info("JSON repaired successfully")
             return repaired
-        raise ValueError(f"Repaired result is not a dict: {type(repaired)}")
+        elif isinstance(repaired, list):
+            logger.info("Repaired result is a list, wrapping in dict")
+            return {"items": repaired}
+        raise ValueError(f"Repaired result is not a dict or list: {type(repaired)}")
     except ImportError:
         logger.warning(
             "json-repair not installed (pip install json-repair) — attempting manual truncation fix"
@@ -317,7 +335,13 @@ class ExtractionService:
             invoices_data = []
             for invoice_content in invoice_contents:
                 invoice_data = await self._extract_invoice(invoice_content)
-                invoices_data.append(invoice_data)
+                # Handle case where multiple invoices are in one PDF
+                if "items" in invoice_data and isinstance(invoice_data["items"], list):
+                    # Multiple invoices returned as a list
+                    invoices_data.extend(invoice_data["items"])
+                else:
+                    # Single invoice
+                    invoices_data.append(invoice_data)
 
             verified_data = self._cross_verify(statement_data, invoices_data)
 
@@ -330,8 +354,11 @@ class ExtractionService:
                 verified_data,
             )
             for idx, invoice_data in enumerate(invoices_data):
+                # Use the original s3_key for the first invoice from each file
+                # For multiple invoices from same file, reuse the same s3_key
+                s3_key_idx = min(idx, len(invoice_s3_keys) - 1)
                 await self._save_invoice(
-                    statement_id, kirana_id, invoice_s3_keys[idx], invoice_data
+                    statement_id, kirana_id, invoice_s3_keys[s3_key_idx], invoice_data
                 )
 
             return {
@@ -401,14 +428,18 @@ class ExtractionService:
         logger.info(f"Invoice extraction mode: {mode}")
 
         if is_ocr:
-            prompt = "These are images of a wholesaler invoice. Read all details from the images. "
+            prompt = "These are images of wholesaler invoice(s). Read all details from the images. "
         else:
-            prompt = "Below is the raw extracted text from a wholesaler invoice. Parse all details. "
+            prompt = "Below is the raw extracted text from wholesaler invoice(s). Parse all details. "
 
         prompt += (
+            "If there are multiple invoices, return them as an array. "
             "Return ONLY valid JSON with no prose or markdown:\n"
             '{"invoice_date":"string","vendor_name":"string","total_amount":number,'
-            '"items":[{"description":"string","amount":number}]}'
+            '"items":[{"description":"string","amount":number}]} '
+            "OR for multiple invoices: "
+            '[{"invoice_date":"string","vendor_name":"string","total_amount":number,'
+            '"items":[{"description":"string","amount":number}]}, ...]'
         )
 
         raw = await self._pool.call([prompt] + parts)

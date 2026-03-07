@@ -65,14 +65,13 @@ class MatchingService:
 
                         matched_nbfcs.append(
                             {
+                                "nbfc_id": nbfc.get("nbfc_id"),
                                 "nbfc_name": nbfc.get("nbfc_name"),
-                                "loan_offer": {
-                                    "min_amount": min_amount,
-                                    "max_amount": max_amount,
-                                    "interest_rate": interest_rate,
-                                    "tenure_months": tenure_months,
-                                },
-                                "match_reason": "Score meets criteria",
+                                "min_loan_amount": min_amount,
+                                "max_loan_amount": max_amount,
+                                "interest_rate": interest_rate,
+                                "tenure_months": tenure_months,
+                                "min_credit_score": min_credit_score,
                             }
                         )
             else:
@@ -83,9 +82,10 @@ class MatchingService:
             return {"error": f"Failed to fetch NBFCs: {str(e)}", "kirana_id": kirana_id}
 
         return {
+            "success": True,
             "kirana_id": kirana_id,
             "credit_score": credit_score,
-            "matched_nbfcs": matched_nbfcs,
+            "nbfcs": matched_nbfcs,
         }
 
     def get_matched_kiranas_for_nbfc(self, nbfc_id: str):

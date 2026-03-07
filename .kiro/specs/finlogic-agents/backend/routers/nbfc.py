@@ -3,7 +3,7 @@ from pydantic import BaseModel, EmailStr
 from typing import List
 from services.nbfc_service import NBFCService
 
-router = APIRouter(prefix="/nbfc", tags=["NBFC"])
+router = APIRouter(prefix="/api/nbfc", tags=["NBFC"])
 
 
 class LoanCriteria(BaseModel):

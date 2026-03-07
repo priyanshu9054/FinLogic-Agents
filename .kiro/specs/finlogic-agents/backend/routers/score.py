@@ -4,7 +4,7 @@ from database import get_db
 from services.scoring_service import ScoringService
 from schemas.score import GenerateScoreRequest, GenerateScoreResponse
 
-router = APIRouter(prefix="/score", tags=["Score"])
+router = APIRouter(prefix="/api/score", tags=["Score"])
 
 
 @router.post("/generate", response_model=GenerateScoreResponse)
