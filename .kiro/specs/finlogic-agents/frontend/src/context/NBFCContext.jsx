@@ -18,6 +18,7 @@ export const NBFCProvider = ({ children }) => {
             nbfcName: '',
             fundsAvailable: true,
             fundsAmount: 2500000,
+            disbursedAmount: 500000,
             matchedKiranas: [],
             pendingRequests: [],
         };
@@ -37,6 +38,7 @@ export const NBFCProvider = ({ children }) => {
             nbfcName: '',
             fundsAvailable: true,
             fundsAmount: 2500000,
+            disbursedAmount: 500000,
             matchedKiranas: [],
             pendingRequests: [],
         });

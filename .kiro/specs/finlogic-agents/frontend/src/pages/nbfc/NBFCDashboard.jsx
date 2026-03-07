@@ -20,8 +20,8 @@ const NBFCDashboard = () => {
     const loadKiranas = async () => {
         try {
             const response = await nbfcAPI.getMatchedKiranas(nbfcData.nbfcId || 'nbfc-001');
-            if (response.data.success) {
-                setKiranas(response.data.kiranas);
+            if (response.data.matched_kiranas) {
+                setKiranas(response.data.matched_kiranas);
             }
         } catch (error) {
             toast.error('Failed to load matches');
@@ -31,8 +31,12 @@ const NBFCDashboard = () => {
     };
 
     const handleDisburse = async (kirana) => {
-        if (!nbfcData.fundsAvailable) {
-            toast.error('❌ Insufficient Funds. Please top up.');
+        // Check if sufficient funds
+        if (!nbfcData.fundsAvailable || nbfcData.fundsAmount < kirana.loan_eligible_amount) {
+            toast.error('📊 Insufficient Funds! Please top up your account.', {
+                description: `Need ₹${(kirana.loan_eligible_amount / 100000).toFixed(1)}L but only ₹${(nbfcData.fundsAmount / 100000).toFixed(1)}L available`,
+                duration: 4000,
+            });
             return;
         }
 
@@ -45,14 +49,19 @@ const NBFCDashboard = () => {
             });
 
             if (response.data.success) {
-                toast.success('✅ Disbursement Successful!');
+                toast.success('🎉 Loan Disbursed Successfully!', {
+                    description: `₹${(kirana.loan_eligible_amount / 100000).toFixed(1)}L transferred to ${kirana.store_name}`,
+                    duration: 3000,
+                });
                 updateNBFCData({
                     fundsAmount: nbfcData.fundsAmount - kirana.loan_eligible_amount,
+                    disbursedAmount: (nbfcData.disbursedAmount || 0) + kirana.loan_eligible_amount,
                 });
+                loadKiranas(); // Refresh the list
                 setSelectedKirana(null);
             }
         } catch (error) {
-            toast.error('Disbursement failed');
+            toast.error('⚠️ Disbursement failed. Please try again.');
         } finally {
             setDisbursing(false);
         }
@@ -104,7 +113,9 @@ const NBFCDashboard = () => {
                             <p className="text-text-muted text-sm">Disbursed</p>
                             <CheckCircle className="w-5 h-5 text-green-400" />
                         </div>
-                        <p className="text-3xl font-bold text-white font-mono">₹5L</p>
+                        <p className="text-3xl font-bold text-white font-mono">
+                            ₹{((nbfcData.disbursedAmount || 0) / 100000).toFixed(1)}L
+                        </p>
                     </div>
                 </div>
 
@@ -118,8 +129,8 @@ const NBFCDashboard = () => {
                         <button
                             onClick={() => updateNBFCData({ fundsAvailable: !nbfcData.fundsAvailable })}
                             className={`px-6 py-3 rounded-lg font-medium transition ${nbfcData.fundsAvailable
-                                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                    : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
                                 }`}
                         >
                             {nbfcData.fundsAvailable ? '🟢 Funds Available' : '🔴 Funds Unavailable'}

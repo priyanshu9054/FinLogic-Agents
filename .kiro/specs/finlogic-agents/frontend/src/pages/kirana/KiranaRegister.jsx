@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
-import { CheckCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, Loader2, Upload } from 'lucide-react';
 import { kiranaAPI } from '../../api';
 import { useKirana } from '../../context/KiranaContext';
 
@@ -11,33 +11,54 @@ const KiranaRegister = () => {
     const { updateKiranaData } = useKirana();
     const [loading, setLoading] = useState(false);
     const [verified, setVerified] = useState(false);
+    const [gstCertificate, setGstCertificate] = useState(null);
 
-    const { register, handleSubmit, setValue, formState: { errors } } = useForm();
+    const { register, handleSubmit, formState: { errors } } = useForm();
 
-    const fillDemo = () => {
-        setValue('storeName', 'Ravi Kirana Store');
-        setValue('ownerName', 'Ravi Kumar');
-        setValue('gstNumber', '27AABCU9603R1ZM');
-        setValue('location', 'Mumbai');
-        setValue('phone', '9876543210');
-        toast.success('Demo data filled');
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file && file.type === 'application/pdf') {
+            setGstCertificate(file);
+            toast.success('GST certificate uploaded');
+        } else {
+            toast.error('Please upload a PDF file');
+        }
     };
 
     const onSubmit = async (data) => {
+        if (!gstCertificate) {
+            toast.error('Please upload GST certificate');
+            return;
+        }
+
         setLoading(true);
         try {
-            const response = await kiranaAPI.verifyGST(data);
-            if (response.data.success) {
+            const formData = new FormData();
+            formData.append('gst_number', data.gstNumber);
+            formData.append('store_name', data.storeName);
+            formData.append('location', data.location);
+            formData.append('owner_name', data.ownerName);
+            formData.append('phone_number', data.phone);
+            formData.append('gst_certificate', gstCertificate);
+
+            const response = await kiranaAPI.verifyGST(formData);
+
+            if (response.data.kirana_id) {
                 setVerified(true);
                 updateKiranaData({
                     kiranaId: response.data.kirana_id,
                     storeName: data.storeName,
+                    ownerName: data.ownerName,
+                    location: data.location,
+                    phone: data.phone,
+                    gstNumber: data.gstNumber,
                 });
                 toast.success('GST verified successfully!');
-                setTimeout(() => navigate('/kirana/kyc'), 1500);
+                setTimeout(() => navigate('/kirana/upload'), 2000);
             }
         } catch (error) {
-            toast.error('Verification failed. Please try again.');
+            console.error('Verification error:', error);
+            toast.error(error.response?.data?.message || 'Verification failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -49,14 +70,6 @@ const KiranaRegister = () => {
                 <div className="bg-bg-card rounded-2xl p-8 border border-gray-800">
                     <h1 className="text-3xl font-heading font-bold text-white mb-2">Kirana Store Registration</h1>
                     <p className="text-text-muted mb-8">Register your store and verify GST to get started</p>
-
-                    <button
-                        type="button"
-                        onClick={fillDemo}
-                        className="mb-6 px-4 py-2 bg-accent/20 text-accent rounded-lg text-sm font-medium hover:bg-accent/30 transition"
-                    >
-                        Fill with Ravi Kirana Store
-                    </button>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         <div>
@@ -119,6 +132,28 @@ const KiranaRegister = () => {
                                 placeholder="9876543210"
                             />
                             {errors.phone && <p className="text-red-400 text-sm mt-1">{errors.phone.message}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-white mb-2">GST Certificate (PDF)</label>
+                            <div className="relative">
+                                <input
+                                    type="file"
+                                    accept="application/pdf"
+                                    onChange={handleFileChange}
+                                    className="hidden"
+                                    id="gst-certificate"
+                                />
+                                <label
+                                    htmlFor="gst-certificate"
+                                    className="w-full px-4 py-3 bg-bg-dark border border-gray-700 rounded-lg text-white cursor-pointer hover:border-primary transition flex items-center justify-between"
+                                >
+                                    <span className={gstCertificate ? 'text-white' : 'text-text-muted'}>
+                                        {gstCertificate ? gstCertificate.name : 'Upload GST Certificate'}
+                                    </span>
+                                    <Upload className="w-5 h-5 text-text-muted" />
+                                </label>
+                            </div>
                         </div>
 
                         {verified && (

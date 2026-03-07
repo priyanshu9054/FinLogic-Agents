@@ -5,46 +5,67 @@ import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { nbfcAPI } from '../../api';
 import { useNBFC } from '../../context/NBFCContext';
-import { mockNBFCs } from '../../api/mockData';
 
 const NBFCRegister = () => {
     const navigate = useNavigate();
     const { updateNBFCData } = useNBFC();
     const [loading, setLoading] = useState(false);
-    const { register, handleSubmit, setValue, formState: { errors } } = useForm();
+    const { register, handleSubmit, watch, formState: { errors } } = useForm({
+        defaultValues: {
+            minCreditScore: 700
+        }
+    });
+
+    console.log('🎨 NBFCRegister component rendered');
 
     const regions = ['Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Chennai', 'Hyderabad'];
-
-    const fillDemo = (preset) => {
-        const nbfc = mockNBFCs.find(n => n.nbfc_id === preset);
-        if (nbfc) {
-            setValue('nbfcName', nbfc.nbfc_name);
-            setValue('rbiLicense', `RBI-${preset.toUpperCase()}`);
-            setValue('email', `contact@${preset}.com`);
-            setValue('phone', '9876543210');
-            setValue('minCreditScore', nbfc.min_credit_score);
-            setValue('minLoanAmount', nbfc.min_loan_amount);
-            setValue('maxLoanAmount', nbfc.max_loan_amount);
-            setValue('interestRate', nbfc.interest_rate);
-            setValue('tenureMonths', nbfc.tenure_months);
-            toast.success(`Filled as ${nbfc.nbfc_name}`);
-        }
-    };
+    const minCreditScore = watch('minCreditScore', 700);
 
     const onSubmit = async (data) => {
+        console.log('🚀 Form submitted with data:', data);
         setLoading(true);
         try {
-            const response = await nbfcAPI.verifyNBFC(data);
-            if (response.data.success) {
+            // Transform data to match backend schema
+            const payload = {
+                nbfc_name: data.nbfcName,
+                rbi_license_number: data.rbiLicense,
+                contact_email: data.email,
+                contact_phone: data.phone,
+                loan_criteria: {
+                    min_credit_score: parseInt(data.minCreditScore),
+                    max_loan_amount: parseInt(data.maxLoanAmount),
+                    min_loan_amount: parseInt(data.minLoanAmount),
+                    preferred_regions: data.preferredRegions || [],
+                    loan_tenure_months: parseInt(data.tenureMonths),
+                    interest_rate: parseFloat(data.interestRate),
+                }
+            };
+
+            console.log('📤 Sending payload to API:', payload);
+            const response = await nbfcAPI.verifyNBFC(payload);
+            console.log('✅ API Response:', response.data);
+
+            // Check if verification was successful
+            if (!response.data.verified) {
+                toast.error(response.data.message || 'NBFC verification failed');
+                console.error('❌ Verification failed:', response.data.message);
+                return;
+            }
+
+            if (response.data.nbfc_id) {
+                console.log('💾 Saving nbfc_id to context:', response.data.nbfc_id);
                 updateNBFCData({
                     nbfcId: response.data.nbfc_id,
                     nbfcName: data.nbfcName,
                 });
                 toast.success('NBFC registered successfully!');
+                console.log('🔄 Navigating to dashboard...');
                 setTimeout(() => navigate('/nbfc/dashboard'), 1000);
             }
         } catch (error) {
-            toast.error('Registration failed. Please try again.');
+            console.error('❌ Registration error:', error);
+            console.error('Error details:', error.response?.data);
+            toast.error(error.response?.data?.detail || 'Registration failed. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -56,30 +77,6 @@ const NBFCRegister = () => {
                 <div className="bg-bg-card rounded-2xl p-8 border border-gray-800">
                     <h1 className="text-3xl font-heading font-bold text-white mb-2">NBFC Registration</h1>
                     <p className="text-text-muted mb-8">Register your NBFC and set lending criteria</p>
-
-                    <div className="flex space-x-3 mb-6">
-                        <button
-                            type="button"
-                            onClick={() => fillDemo('nbfc-001')}
-                            className="px-4 py-2 bg-accent/20 text-accent rounded-lg text-sm font-medium hover:bg-accent/30 transition"
-                        >
-                            Fill as QuickCapital
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => fillDemo('nbfc-002')}
-                            className="px-4 py-2 bg-accent/20 text-accent rounded-lg text-sm font-medium hover:bg-accent/30 transition"
-                        >
-                            Fill as GrowMore
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => fillDemo('nbfc-003')}
-                            className="px-4 py-2 bg-accent/20 text-accent rounded-lg text-sm font-medium hover:bg-accent/30 transition"
-                        >
-                            Fill as MicroLend
-                        </button>
-                    </div>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         {/* NBFC Details */}
@@ -100,10 +97,17 @@ const NBFCRegister = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-white mb-2">RBI License Number</label>
                                     <input
-                                        {...register('rbiLicense', { required: 'RBI license is required' })}
+                                        {...register('rbiLicense', {
+                                            required: 'RBI license is required',
+                                            pattern: {
+                                                value: /^N-[A-Za-z0-9.]{5,14}$/,
+                                                message: 'Invalid format. Must start with N- (e.g., N-14.03296)'
+                                            }
+                                        })}
                                         className="w-full px-4 py-3 bg-bg-dark border border-gray-700 rounded-lg text-white font-mono focus:border-primary focus:outline-none"
-                                        placeholder="RBI-NBFC-001"
+                                        placeholder="N-14.03296"
                                     />
+                                    <p className="text-xs text-text-muted mt-1">Format: N-14.03296 (must start with N-)</p>
                                     {errors.rbiLicense && <p className="text-red-400 text-sm mt-1">{errors.rbiLicense.message}</p>}
                                 </div>
 
@@ -139,7 +143,7 @@ const NBFCRegister = () => {
                             <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-white mb-2">
-                                        Minimum Credit Score: <span className="text-primary font-mono">{register('minCreditScore').value || 700}</span>
+                                        Minimum Credit Score: <span className="text-primary font-mono">{minCreditScore}</span>
                                     </label>
                                     <input
                                         {...register('minCreditScore', { required: true })}
@@ -222,10 +226,49 @@ const NBFCRegister = () => {
                         <button
                             type="submit"
                             disabled={loading}
+                            onClick={(e) => {
+                                console.log('🖱️ Button clicked!');
+                                console.log('Form errors:', errors);
+                                alert('Button was clicked! Check console for details.');
+                            }}
                             className="w-full px-6 py-3 bg-primary text-white rounded-lg font-medium hover:bg-opacity-90 transition disabled:opacity-50 flex items-center justify-center space-x-2"
                         >
                             {loading && <Loader2 className="w-5 h-5 animate-spin" />}
                             <span>{loading ? 'Registering...' : 'Register NBFC'}</span>
+                        </button>
+
+                        {/* DEBUG: Test button that bypasses form validation */}
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                console.log('🧪 TEST BUTTON CLICKED');
+                                const testPayload = {
+                                    nbfc_name: "Test NBFC",
+                                    rbi_license_number: "N-14.03296",
+                                    contact_email: "test@nbfc.com",
+                                    contact_phone: "9898989898",
+                                    loan_criteria: {
+                                        min_credit_score: 700,
+                                        max_loan_amount: 500000,
+                                        min_loan_amount: 100000,
+                                        loan_tenure_months: 24,
+                                        preferred_regions: ["Mumbai"],
+                                        interest_rate: 13.5
+                                    }
+                                };
+                                try {
+                                    console.log('📤 Calling API with test payload...');
+                                    const response = await nbfcAPI.verifyNBFC(testPayload);
+                                    console.log('✅ Test API Response:', response.data);
+                                    alert('API call successful! Check console. nbfc_id: ' + response.data.nbfc_id);
+                                } catch (error) {
+                                    console.error('❌ Test API Error:', error);
+                                    alert('API call failed! Check console.');
+                                }
+                            }}
+                            className="w-full px-6 py-3 bg-yellow-500 text-black rounded-lg font-medium hover:bg-yellow-600 transition"
+                        >
+                            🧪 TEST API CALL (Debug)
                         </button>
                     </form>
                 </div>

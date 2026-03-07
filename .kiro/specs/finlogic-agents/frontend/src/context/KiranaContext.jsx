@@ -18,6 +18,9 @@ export const KiranaProvider = ({ children }) => {
             storeName: '',
             creditScore: null,
             scoreBreakdown: {},
+            riskLevel: null,
+            loanEligibleAmount: null,
+            recommendations: [],
             statementSummary: {},
             kycComplete: false,
             matchedNBFCs: [],
@@ -26,6 +29,11 @@ export const KiranaProvider = ({ children }) => {
 
     useEffect(() => {
         sessionStorage.setItem('kiranaData', JSON.stringify(kiranaData));
+
+        // Also cache kirana_id separately for easy API access
+        if (kiranaData.kiranaId) {
+            sessionStorage.setItem('kirana_id', kiranaData.kiranaId);
+        }
     }, [kiranaData]);
 
     const updateKiranaData = (updates) => {
@@ -38,11 +46,15 @@ export const KiranaProvider = ({ children }) => {
             storeName: '',
             creditScore: null,
             scoreBreakdown: {},
+            riskLevel: null,
+            loanEligibleAmount: null,
+            recommendations: [],
             statementSummary: {},
             kycComplete: false,
             matchedNBFCs: [],
         });
         sessionStorage.removeItem('kiranaData');
+        sessionStorage.removeItem('kirana_id');
     };
 
     return (

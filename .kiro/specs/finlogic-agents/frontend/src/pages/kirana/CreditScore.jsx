@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, TrendingUp } from 'lucide-react';
+import { ArrowRight, TrendingUp, CheckCircle } from 'lucide-react';
 import { useKirana } from '../../context/KiranaContext';
 import ScoreGauge from '../../components/common/ScoreGauge';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -7,9 +7,10 @@ import StatusBadge from '../../components/common/StatusBadge';
 const CreditScore = () => {
     const navigate = useNavigate();
     const { kiranaData } = useKirana();
-    const { creditScore, scoreBreakdown } = kiranaData;
+    const { creditScore, scoreBreakdown, riskLevel, loanEligibleAmount, recommendations } = kiranaData;
 
     const getRiskLevel = (score) => {
+        if (riskLevel) return riskLevel;
         if (score >= 750) return 'Low';
         if (score >= 600) return 'Medium';
         if (score >= 400) return 'High';
@@ -17,25 +18,41 @@ const CreditScore = () => {
     };
 
     const getEligibleAmount = (score) => {
+        if (loanEligibleAmount) return loanEligibleAmount;
         if (score >= 750) return 500000;
         if (score >= 600) return 300000;
         if (score >= 400) return 150000;
         return 50000;
     };
 
-    const recommendations = [
+    const defaultRecommendations = [
         'Maintain consistent monthly transactions',
         'Keep invoice matching above 80%',
         'Ensure regular purchases from wholesalers',
         'Maintain healthy bank balance',
     ];
 
+    const displayRecommendations = recommendations && recommendations.length > 0
+        ? recommendations
+        : defaultRecommendations;
+
     return (
         <div className="min-h-screen bg-bg-dark py-12">
             <div className="max-w-4xl mx-auto px-4">
                 <div className="bg-bg-card rounded-2xl p-8 border border-gray-800">
-                    <h1 className="text-3xl font-heading font-bold text-white mb-2">Your Credit Score</h1>
-                    <p className="text-text-muted mb-8">Based on your financial analysis</p>
+                    {/* Congratulations Banner */}
+                    <div className="bg-gradient-to-r from-primary/20 to-secondary/20 rounded-xl p-6 mb-8 border border-primary/30">
+                        <div className="flex items-center justify-center space-x-3 mb-3">
+                            <div className="w-12 h-12 bg-primary/30 rounded-full flex items-center justify-center">
+                                <CheckCircle className="w-7 h-7 text-primary" />
+                            </div>
+                            <h1 className="text-3xl font-heading font-bold text-white">Congratulations!</h1>
+                        </div>
+                        <p className="text-center text-white text-lg">Your credit score has been successfully generated</p>
+                    </div>
+
+                    <h2 className="text-2xl font-heading font-bold text-white mb-2 text-center">Your Credit Score</h2>
+                    <p className="text-text-muted mb-8 text-center">Based on your financial analysis</p>
 
                     {/* Score Gauge */}
                     <div className="mb-12">
@@ -60,7 +77,7 @@ const CreditScore = () => {
                     <div className="mb-8">
                         <h2 className="text-xl font-heading font-bold text-white mb-4">Score Breakdown</h2>
                         <div className="space-y-3">
-                            {Object.entries(scoreBreakdown || {
+                            {Object.entries(scoreBreakdown && Object.keys(scoreBreakdown).length > 0 ? scoreBreakdown : {
                                 credit_consistency: 180,
                                 purchase_regularity: 160,
                                 invoice_match: 170,
@@ -91,13 +108,13 @@ const CreditScore = () => {
                     <div className="mb-8">
                         <h2 className="text-xl font-heading font-bold text-white mb-4 flex items-center">
                             <TrendingUp className="w-5 h-5 mr-2 text-secondary" />
-                            Recommendations
+                            Recommendations to Improve Your Score
                         </h2>
-                        <ul className="space-y-2">
-                            {recommendations.map((rec, i) => (
-                                <li key={i} className="flex items-start space-x-2 text-text-muted">
-                                    <span className="text-secondary mt-1">•</span>
-                                    <span>{rec}</span>
+                        <ul className="space-y-3">
+                            {displayRecommendations.map((rec, i) => (
+                                <li key={i} className="flex items-start space-x-3 text-text-muted bg-bg-dark rounded-lg p-3">
+                                    <span className="text-secondary mt-1 text-lg">•</span>
+                                    <span className="flex-1">{rec}</span>
                                 </li>
                             ))}
                         </ul>

@@ -20,40 +20,72 @@ const LoanOffers = () => {
 
     const loadNBFCs = async () => {
         try {
-            const response = await kiranaAPI.getMatchedNBFCs(kiranaData.kiranaId || 'kirana-001');
-            if (response.data.success) {
+            // Use cached kirana_id from context or sessionStorage
+            const kiranaIdToUse = kiranaData.kiranaId || sessionStorage.getItem('kirana_id');
+            if (!kiranaIdToUse) {
+                toast.error('Kirana ID not found. Please complete registration first.');
+                setLoading(false);
+                return;
+            }
+
+            const response = await kiranaAPI.getMatchedNBFCs(kiranaIdToUse);
+            if (response.data && response.data.nbfcs) {
                 setNbfcs(response.data.nbfcs);
+            } else if (response.data && Array.isArray(response.data)) {
+                setNbfcs(response.data);
             }
         } catch (error) {
-            toast.error('Failed to load offers');
+            console.error('Failed to load NBFCs:', error);
+            toast.error(error.response?.data?.message || 'Failed to load offers');
         } finally {
             setLoading(false);
         }
     };
 
     const handleRequestLoan = async () => {
-        if (!loanAmount || loanAmount < selectedNBFC.min_loan_amount || loanAmount > selectedNBFC.max_loan_amount) {
+        const amount = parseFloat(loanAmount);
+
+        // Validate amount is entered
+        if (!loanAmount || isNaN(amount)) {
             toast.error('Please enter a valid loan amount');
+            return;
+        }
+
+        // Check if amount is within NBFC range
+        if (amount < selectedNBFC.min_loan_amount || amount > selectedNBFC.max_loan_amount) {
+            toast.error(`Loan amount must be between ₹${selectedNBFC.min_loan_amount.toLocaleString('en-IN')} and ₹${selectedNBFC.max_loan_amount.toLocaleString('en-IN')}`);
             return;
         }
 
         setRequesting(true);
         try {
+            // Use cached kirana_id from context or sessionStorage
+            const kiranaIdToUse = kiranaData.kiranaId || sessionStorage.getItem('kirana_id');
+            if (!kiranaIdToUse) {
+                toast.error('Kirana ID not found. Please complete registration first.');
+                setRequesting(false);
+                return;
+            }
+
+            // Dummy validation: Check if amount is in range (already validated above)
+            // In real scenario, this would be an API call
             const response = await kiranaAPI.requestLoan({
-                kirana_id: kiranaData.kiranaId,
+                kirana_id: kiranaIdToUse,
                 nbfc_id: selectedNBFC.nbfc_id,
-                amount: loanAmount,
+                amount: amount,
             });
+
             if (response.data.success) {
                 setRequested(true);
                 toast.success('Loan request sent successfully!');
                 setTimeout(() => {
                     setSelectedNBFC(null);
                     setRequested(false);
+                    setLoanAmount('');
                 }, 3000);
             }
         } catch (error) {
-            toast.error('Request failed');
+            toast.error(error.response?.data?.message || 'Request failed');
         } finally {
             setRequesting(false);
         }

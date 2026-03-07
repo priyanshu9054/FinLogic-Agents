@@ -12,9 +12,26 @@ const api = axios.create({
 // Helper to simulate API delay
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Helper to get cached kirana_id
+export const getCachedKiranaId = () => {
+    return sessionStorage.getItem('kirana_id');
+};
+
+// Helper to set cached kirana_id
+export const setCachedKiranaId = (kiranaId) => {
+    if (kiranaId) {
+        sessionStorage.setItem('kirana_id', kiranaId);
+    }
+};
+
+// Helper to clear cached kirana_id
+export const clearCachedKiranaId = () => {
+    sessionStorage.removeItem('kirana_id');
+};
+
 // ─── KIRANA APIs ───────────────────────────────────────────────
 export const kiranaAPI = {
-    verifyGST: async (data) => {
+    verifyGST: async (formData) => {
         if (DEMO_MODE) {
             await delay(1000);
             return {
@@ -22,11 +39,19 @@ export const kiranaAPI = {
                     success: true,
                     kirana_id: `kirana-${Date.now()}`,
                     verified: true,
-                    ...data,
                 }
             };
         }
-        return api.post('/api/gst/verify', data);
+        const response = await api.post('/api/gst/verify', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        // Cache kirana_id in sessionStorage for future API calls
+        if (response.data && response.data.kirana_id) {
+            sessionStorage.setItem('kirana_id', response.data.kirana_id);
+        }
+
+        return response;
     },
 
     uploadStatement: async (formData) => {
@@ -44,6 +69,17 @@ export const kiranaAPI = {
                 }
             };
         }
+
+        // Ensure kirana_id is in formData - use cached if not provided
+        if (!formData.has('kirana_id')) {
+            const cachedKiranaId = sessionStorage.getItem('kirana_id');
+            if (cachedKiranaId) {
+                formData.append('kirana_id', cachedKiranaId);
+            } else {
+                throw new Error('Kirana ID not found. Please complete registration first.');
+            }
+        }
+
         return api.post('/api/statement/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' },
         });
@@ -69,7 +105,14 @@ export const kiranaAPI = {
                 }
             };
         }
-        return api.post('/api/score/generate', { kirana_id: kiranaId });
+
+        // Use cached kirana_id if not provided
+        const id = kiranaId || sessionStorage.getItem('kirana_id');
+        if (!id) {
+            throw new Error('Kirana ID not found. Please complete registration first.');
+        }
+
+        return api.post('/api/score/generate', { kirana_id: id });
     },
 
     getMatchedNBFCs: async (kiranaId) => {
@@ -82,7 +125,14 @@ export const kiranaAPI = {
             );
             return { data: { success: true, nbfcs: matched } };
         }
-        return api.get(`/api/matching/nbfcs/${kiranaId}`);
+
+        // Use cached kirana_id if not provided
+        const id = kiranaId || sessionStorage.getItem('kirana_id');
+        if (!id) {
+            throw new Error('Kirana ID not found. Please complete registration first.');
+        }
+
+        return api.get(`/api/matching/nbfcs/${id}`);
     },
 
     requestLoan: async (data) => {

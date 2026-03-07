@@ -14,7 +14,6 @@ import CreditScore from './pages/kirana/CreditScore';
 import LoanOffers from './pages/kirana/LoanOffers';
 import NBFCRegister from './pages/nbfc/NBFCRegister';
 import NBFCDashboard from './pages/nbfc/NBFCDashboard';
-import ScenarioDemo from './pages/demo/ScenarioDemo';
 
 const queryClient = new QueryClient();
 
@@ -31,7 +30,6 @@ function App() {
 
                                 {/* Kirana Flow */}
                                 <Route path="/kirana/register" element={<KiranaRegister />} />
-                                <Route path="/kirana/kyc" element={<KiranaKYC />} />
                                 <Route path="/kirana/upload" element={<StatementUpload />} />
                                 <Route path="/kirana/score" element={<CreditScore />} />
                                 <Route path="/kirana/offers" element={<LoanOffers />} />
@@ -39,9 +37,6 @@ function App() {
                                 {/* NBFC Flow */}
                                 <Route path="/nbfc/register" element={<NBFCRegister />} />
                                 <Route path="/nbfc/dashboard" element={<NBFCDashboard />} />
-
-                                {/* Demo */}
-                                <Route path="/demo" element={<ScenarioDemo />} />
                             </Routes>
                             <Toaster position="top-right" richColors />
                         </div>
