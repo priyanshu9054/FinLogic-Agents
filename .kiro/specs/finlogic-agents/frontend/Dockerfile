@@ -2,16 +2,15 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+ARG VITE_API_BASE_URL
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+
 COPY package*.json ./
 
-# Install dependencies
 RUN npm ci
 
-# Copy source code
 COPY . .
 
-# Build the application
 RUN npm run build
 
 # Production stage
