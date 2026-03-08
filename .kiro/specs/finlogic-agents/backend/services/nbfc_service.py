@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from database import dynamodb
 from config import DYNAMO_NBFCS_TABLE
+from storage import upload_file
 import logging
 
 logger = logging.getLogger(__name__)
@@ -36,9 +37,11 @@ class NBFCService:
             return [self._convert_floats_to_decimal(item) for item in obj]
         return obj
 
-    def verify_nbfc(self, data: dict) -> dict:
+    async def verify_nbfc(
+        self, data: dict, certificate_content: bytes, certificate_filename: str
+    ) -> dict:
         """
-        Verify NBFC and save to DynamoDB
+        Verify NBFC and save to DynamoDB with registration certificate
         """
         rbi_license_number = data.get("rbi_license_number", "")
 
@@ -50,6 +53,23 @@ class NBFCService:
                 "message": "Invalid RBI license format. Must start with N- followed by alphanumeric characters.",
             }
 
+        # Generate unique NBFC ID
+        nbfc_id = str(uuid.uuid4())
+
+        # Upload registration certificate to S3
+        certificate_s3_key = upload_file(
+            certificate_content,
+            f"nbfcs/{nbfc_id}/certificates",
+            certificate_filename,
+        )
+
+        if not certificate_s3_key:
+            return {
+                "nbfc_id": "",
+                "verified": False,
+                "message": "Failed to upload registration certificate",
+            }
+
         # Dummy RBI verification (always returns true for valid format)
         verification_result = {
             "verified": True,
@@ -57,9 +77,6 @@ class NBFCService:
             "registration_date": "2020-01-15",
             "status": "Active",
         }
-
-        # Generate unique NBFC ID
-        nbfc_id = str(uuid.uuid4())
 
         # Convert loan_criteria floats to Decimal for DynamoDB
         loan_criteria = self._convert_floats_to_decimal(data.get("loan_criteria"))
@@ -72,6 +89,7 @@ class NBFCService:
             "contact_email": data.get("contact_email"),
             "contact_phone": data.get("contact_phone"),
             "loan_criteria": loan_criteria,
+            "registration_certificate_s3_key": certificate_s3_key,
             "verified": verification_result["verified"],
             "nbfc_type": verification_result["nbfc_type"],
             "registration_date": verification_result["registration_date"],
@@ -83,7 +101,7 @@ class NBFCService:
         try:
             if self.table:
                 self.table.put_item(Item=item)
-                logger.info(f"NBFC {nbfc_id} saved to DynamoDB")
+                logger.info(f"NBFC {nbfc_id} saved to DynamoDB with certificate")
             else:
                 logger.warning("DynamoDB table not initialized")
         except Exception as e:
@@ -97,5 +115,5 @@ class NBFCService:
         return {
             "nbfc_id": nbfc_id,
             "verified": True,
-            "message": "NBFC verified successfully",
+            "message": "NBFC verified successfully with registration certificate",
         }

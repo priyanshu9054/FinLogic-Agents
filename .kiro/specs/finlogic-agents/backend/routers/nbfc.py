@@ -1,7 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from pydantic import BaseModel, EmailStr
-from typing import List
+from typing import List, Optional
 from services.nbfc_service import NBFCService
+import json
 
 router = APIRouter(prefix="/api/nbfc", tags=["NBFC"])
 
@@ -30,6 +31,44 @@ class NBFCVerifyResponse(BaseModel):
 
 
 @router.post("/verify", response_model=NBFCVerifyResponse)
-def verify_nbfc(request: NBFCVerifyRequest):
-    service = NBFCService()
-    return service.verify_nbfc(request.dict())
+async def verify_nbfc(
+    nbfc_name: str = Form(...),
+    rbi_license_number: str = Form(...),
+    contact_email: str = Form(...),
+    contact_phone: str = Form(...),
+    loan_criteria: str = Form(...),
+    registration_certificate: UploadFile = File(...),
+):
+    """
+    Verify NBFC with registration certificate upload
+    """
+    try:
+        # Parse loan_criteria JSON string
+        loan_criteria_dict = json.loads(loan_criteria)
+
+        # Read certificate file
+        certificate_content = await registration_certificate.read()
+
+        # Prepare data
+        data = {
+            "nbfc_name": nbfc_name,
+            "rbi_license_number": rbi_license_number,
+            "contact_email": contact_email,
+            "contact_phone": contact_phone,
+            "loan_criteria": loan_criteria_dict,
+        }
+
+        # Verify NBFC with certificate
+        service = NBFCService()
+        result = await service.verify_nbfc(
+            data=data,
+            certificate_content=certificate_content,
+            certificate_filename=registration_certificate.filename,
+        )
+
+        return result
+
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid loan_criteria format")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
