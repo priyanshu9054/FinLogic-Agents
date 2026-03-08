@@ -21,11 +21,13 @@ logger = logging.getLogger(__name__)
 #
 # Model                  Real RPM  Our cap  Real RPD  Our cap
 # gemini-2.5-flash-lite    15        7       1000       500
+# gemini-2.0-flash         15        7       1500       750
 # gemini-2.5-flash         10        5        250       125
 # gemini-2.5-pro            5        2        100        50
 # ---------------------------------------------------------------------------
 MODELS = [
     {"name": "gemini-2.5-flash-lite", "rpm_cap": 7, "rpd_cap": 500},
+    {"name": "gemini-2.0-flash", "rpm_cap": 7, "rpd_cap": 750},
     {"name": "gemini-2.5-flash", "rpm_cap": 5, "rpd_cap": 125},
     {"name": "gemini-2.5-pro", "rpm_cap": 2, "rpd_cap": 50},
 ]
