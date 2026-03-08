@@ -160,11 +160,17 @@ export const nbfcAPI = {
                     success: true,
                     nbfc_id: `nbfc-${Date.now()}`,
                     verified: true,
-                    ...data,
+                    message: 'NBFC verified successfully',
                 }
             };
         }
-        return api.post('/api/nbfc/verify', data);
+
+        // Check if data is FormData (for file upload)
+        const isFormData = data instanceof FormData;
+
+        return api.post('/api/nbfc/verify', data, {
+            headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : undefined,
+        });
     },
 
     getMatchedKiranas: async (nbfcId) => {
