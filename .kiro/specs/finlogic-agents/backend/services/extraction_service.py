@@ -339,6 +339,9 @@ class ExtractionService:
                 if isinstance(invoice_data, list):
                     # Multiple invoices returned as a list
                     invoices_data.extend(invoice_data)
+                elif isinstance(invoice_data, dict) and "items" in invoice_data:
+                    # List was wrapped in {"items": [...]} by _extract_json
+                    invoices_data.extend(invoice_data["items"])
                 else:
                     # Single invoice
                     invoices_data.append(invoice_data)
