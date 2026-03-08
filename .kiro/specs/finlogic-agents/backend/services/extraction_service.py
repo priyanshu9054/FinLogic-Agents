@@ -336,9 +336,9 @@ class ExtractionService:
             for invoice_content in invoice_contents:
                 invoice_data = await self._extract_invoice(invoice_content)
                 # Handle case where multiple invoices are in one PDF
-                if "items" in invoice_data and isinstance(invoice_data["items"], list):
+                if isinstance(invoice_data, list):
                     # Multiple invoices returned as a list
-                    invoices_data.extend(invoice_data["items"])
+                    invoices_data.extend(invoice_data)
                 else:
                     # Single invoice
                     invoices_data.append(invoice_data)
