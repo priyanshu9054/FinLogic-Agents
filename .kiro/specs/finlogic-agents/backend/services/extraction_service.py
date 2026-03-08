@@ -252,6 +252,7 @@ class _ModelPool:
             self._rpm_calls[name] = [now] * self._cfg[name]["rpm_cap"]
 
     async def call(self, parts: list) -> str:
+        """Legacy method for text-based responses (kept for backward compatibility)"""
         loop = asyncio.get_event_loop()
 
         for _ in range(len(self._names) * 3):
@@ -306,6 +307,100 @@ class _ModelPool:
 
         raise RuntimeError("Exhausted all retry attempts across all models")
 
+    async def call_with_tools(self, parts: list, tools: list) -> dict:
+        """
+        Call model with function calling (tool use) to get structured output.
+        Returns the parsed function call arguments as a dict.
+        """
+        loop = asyncio.get_event_loop()
+
+        for _ in range(len(self._names) * 3):
+            chosen = next(
+                (n for n in self._names if self._rpd_ok(n) and self._rpm_slots(n) > 0),
+                None,
+            )
+
+            if chosen is None:
+                eligible = [n for n in self._names if self._rpd_ok(n)]
+                if not eligible:
+                    raise RuntimeError(
+                        "All models have exhausted their daily free-tier quota. "
+                        "Quota resets at midnight Pacific Time."
+                    )
+                wait = min(self._seconds_until_rpm_slot(n) for n in eligible)
+                logger.info(f"RPM limit on all models — waiting {wait:.1f}s")
+                await asyncio.sleep(wait)
+                continue
+
+            self._rpm_calls[chosen].append(time.monotonic())
+            self._rpd_used[chosen] += 1
+            logger.info(
+                f"Calling {chosen} with function calling "
+                f"(rpm {len(self._rpm_calls[chosen])}/{self._cfg[chosen]['rpm_cap']}, "
+                f"rpd {self._rpd_used[chosen]}/{self._cfg[chosen]['rpd_cap']})"
+            )
+
+            try:
+                # Convert our schema format to Gemini's tool format
+                gemini_tools = [
+                    types.Tool(
+                        function_declarations=[
+                            types.FunctionDeclaration(
+                                name=tool["name"],
+                                description=tool["description"],
+                                parameters=tool["parameters"],
+                            )
+                            for tool in tools
+                        ]
+                    )
+                ]
+
+                response = await loop.run_in_executor(
+                    None,
+                    partial(
+                        self._client.models.generate_content,
+                        model=chosen,
+                        contents=parts,
+                        config=types.GenerateContentConfig(
+                            tools=gemini_tools,
+                            tool_config=types.ToolConfig(
+                                function_calling_config=types.FunctionCallingConfig(
+                                    mode="ANY"  # Force the model to use the function
+                                )
+                            ),
+                        ),
+                    ),
+                )
+
+                # Extract function call from response
+                if response.candidates and response.candidates[0].content.parts:
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, "function_call") and part.function_call:
+                            # Return the function arguments as a dict
+                            logger.info(
+                                f"Function call received: {part.function_call.name}"
+                            )
+                            return dict(part.function_call.args)
+
+                # Fallback: if no function call, try to parse text response
+                logger.warning("No function call in response, attempting text parsing")
+                return _extract_json(response.text)
+
+            except Exception as exc:
+                exc_repr = repr(exc)
+                logger.warning(f"Model {chosen} failed: {exc_repr}")
+                if "429" in exc_repr or "RESOURCE_EXHAUSTED" in exc_repr:
+                    retry_delay = _parse_retry_delay(exc_repr)
+                    self._mark_429(chosen, exc_repr)
+                    next_ok = any(self._rpd_ok(n) for n in self._names if n != chosen)
+                    if not next_ok:
+                        logger.info(f"Waiting {retry_delay:.1f}s as instructed by API")
+                        await asyncio.sleep(retry_delay)
+                    continue
+                raise
+
+        raise RuntimeError("Exhausted all retry attempts across all models")
+
 
 # ---------------------------------------------------------------------------
 # Extraction Service
@@ -337,15 +432,12 @@ class ExtractionService:
             invoices_data = []
             for invoice_content in invoice_contents:
                 invoice_data = await self._extract_invoice(invoice_content)
-                # Handle case where multiple invoices are in one PDF
+                # _extract_invoice now always returns a list of invoices
                 if isinstance(invoice_data, list):
-                    # Multiple invoices returned as a list
                     invoices_data.extend(invoice_data)
-                elif isinstance(invoice_data, dict) and "items" in invoice_data:
-                    # List was wrapped in {"items": [...]} by _extract_json
-                    invoices_data.extend(invoice_data["items"])
                 else:
-                    # Single invoice
+                    # Fallback in case of unexpected format
+                    logger.warning(f"Unexpected invoice format: {type(invoice_data)}")
                     invoices_data.append(invoice_data)
 
             verified_data = self._cross_verify(statement_data, invoices_data)
@@ -409,23 +501,87 @@ class ExtractionService:
         logger.info(f"Bank statement extraction mode: {mode}")
 
         if is_ocr:
-            prompt = "These are images of a bank statement. Read every transaction from all pages. "
+            prompt = "These are images of a bank statement. Read every transaction from all pages and extract the data."
         else:
-            prompt = (
-                "Below is the raw extracted text from a bank statement. "
-                "Parse every transaction from this text. "
-            )
+            prompt = "Below is the raw extracted text from a bank statement. Parse every transaction from this text."
 
-        prompt += (
-            "Return ONLY valid JSON with no prose or markdown:\n"
-            '{"transactions":[{"date":"string","description":"string",'
-            '"debit":number_or_null,"credit":number_or_null,"balance":number}],'
-            '"monthly_summary":[{"month":"string","total_credits":number,'
-            '"total_debits":number,"closing_balance":number}]}'
+        # Define the function schema for structured output
+        bank_statement_schema = {
+            "name": "extract_bank_statement",
+            "description": "Extract structured data from a bank statement",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "transactions": {
+                        "type": "array",
+                        "description": "List of all transactions from the statement",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "date": {
+                                    "type": "string",
+                                    "description": "Transaction date",
+                                },
+                                "description": {
+                                    "type": "string",
+                                    "description": "Transaction description",
+                                },
+                                "debit": {
+                                    "type": ["number", "null"],
+                                    "description": "Debit amount or null",
+                                },
+                                "credit": {
+                                    "type": ["number", "null"],
+                                    "description": "Credit amount or null",
+                                },
+                                "balance": {
+                                    "type": "number",
+                                    "description": "Balance after transaction",
+                                },
+                            },
+                            "required": ["date", "description", "balance"],
+                        },
+                    },
+                    "monthly_summary": {
+                        "type": "array",
+                        "description": "Monthly aggregated summary",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "month": {
+                                    "type": "string",
+                                    "description": "Month identifier",
+                                },
+                                "total_credits": {
+                                    "type": "number",
+                                    "description": "Total credits for the month",
+                                },
+                                "total_debits": {
+                                    "type": "number",
+                                    "description": "Total debits for the month",
+                                },
+                                "closing_balance": {
+                                    "type": "number",
+                                    "description": "Closing balance for the month",
+                                },
+                            },
+                            "required": [
+                                "month",
+                                "total_credits",
+                                "total_debits",
+                                "closing_balance",
+                            ],
+                        },
+                    },
+                },
+                "required": ["transactions", "monthly_summary"],
+            },
+        }
+
+        raw = await self._pool.call_with_tools(
+            [prompt] + parts, [bank_statement_schema]
         )
-
-        raw = await self._pool.call([prompt] + parts)
-        return _extract_json(raw)
+        return raw
 
     async def _extract_invoice(self, file_content: bytes) -> dict:
         parts, is_ocr = await self._build_parts_for_pdf(file_content)
@@ -433,22 +589,70 @@ class ExtractionService:
         logger.info(f"Invoice extraction mode: {mode}")
 
         if is_ocr:
-            prompt = "These are images of wholesaler invoice(s). Read all details from the images. "
+            prompt = "These are images of wholesaler invoice(s). Read all details from the images and extract the data."
         else:
-            prompt = "Below is the raw extracted text from wholesaler invoice(s). Parse all details. "
+            prompt = "Below is the raw extracted text from wholesaler invoice(s). Parse all details."
 
-        prompt += (
-            "If there are multiple invoices, return them as an array. "
-            "Return ONLY valid JSON with no prose or markdown:\n"
-            '{"invoice_date":"string","vendor_name":"string","total_amount":number,'
-            '"items":[{"description":"string","amount":number}]} '
-            "OR for multiple invoices: "
-            '[{"invoice_date":"string","vendor_name":"string","total_amount":number,'
-            '"items":[{"description":"string","amount":number}]}, ...]'
-        )
+        # Define the function schema for structured output
+        invoice_schema = {
+            "name": "extract_invoices",
+            "description": "Extract structured data from one or more invoices",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "invoices": {
+                        "type": "array",
+                        "description": "List of invoices (can be single or multiple)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "invoice_date": {
+                                    "type": "string",
+                                    "description": "Invoice date",
+                                },
+                                "vendor_name": {
+                                    "type": "string",
+                                    "description": "Vendor/supplier name",
+                                },
+                                "total_amount": {
+                                    "type": "number",
+                                    "description": "Total invoice amount",
+                                },
+                                "items": {
+                                    "type": "array",
+                                    "description": "Line items in the invoice",
+                                    "items": {
+                                        "type": "object",
+                                        "properties": {
+                                            "description": {
+                                                "type": "string",
+                                                "description": "Item description",
+                                            },
+                                            "amount": {
+                                                "type": "number",
+                                                "description": "Item amount",
+                                            },
+                                        },
+                                        "required": ["description", "amount"],
+                                    },
+                                },
+                            },
+                            "required": [
+                                "invoice_date",
+                                "vendor_name",
+                                "total_amount",
+                                "items",
+                            ],
+                        },
+                    }
+                },
+                "required": ["invoices"],
+            },
+        }
 
-        raw = await self._pool.call([prompt] + parts)
-        return _extract_json(raw)
+        raw = await self._pool.call_with_tools([prompt] + parts, [invoice_schema])
+        # Return the invoices array directly for consistency with existing code
+        return raw.get("invoices", [])
 
     # ------------------------------------------------------------------
     # Cross-verification
