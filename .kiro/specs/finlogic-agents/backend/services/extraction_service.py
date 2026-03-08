@@ -527,12 +527,14 @@ class ExtractionService:
                                     "description": "Transaction description",
                                 },
                                 "debit": {
-                                    "type": ["number", "null"],
-                                    "description": "Debit amount or null",
+                                    "type": "number",
+                                    "description": "Debit amount, use 0 if not applicable",
+                                    "nullable": True,
                                 },
                                 "credit": {
-                                    "type": ["number", "null"],
-                                    "description": "Credit amount or null",
+                                    "type": "number",
+                                    "description": "Credit amount, use 0 if not applicable",
+                                    "nullable": True,
                                 },
                                 "balance": {
                                     "type": "number",
@@ -665,22 +667,30 @@ class ExtractionService:
 
         matched_count = 0
         for t in transactions:
-            if t.get("debit"):
-                t["verified_purchase"] = t["debit"] in invoice_amounts
+            # Handle nullable fields - treat 0, None, or missing as falsy
+            debit = t.get("debit")
+            credit = t.get("credit")
+
+            if debit and debit > 0:
+                t["verified_purchase"] = debit in invoice_amounts
                 if t["verified_purchase"]:
                     matched_count += 1
-            if t.get("credit"):
+            if credit and credit > 0:
                 t["assumed_sales"] = True
 
-        total_debits_count = sum(1 for t in transactions if t.get("debit"))
+        total_debits_count = sum(1 for t in transactions if t.get("debit", 0) > 0)
         invoice_match_rate = (
             matched_count / total_debits_count * 100 if total_debits_count else 0
         )
         return {
             "transactions": transactions,
             "monthly_summary": monthly_summary,
-            "total_credits": sum(t["credit"] for t in transactions if t.get("credit")),
-            "total_debits": sum(t["debit"] for t in transactions if t.get("debit")),
+            "total_credits": sum(
+                t.get("credit", 0) for t in transactions if t.get("credit", 0) > 0
+            ),
+            "total_debits": sum(
+                t.get("debit", 0) for t in transactions if t.get("debit", 0) > 0
+            ),
             "months_analyzed": len(monthly_summary),
             "invoice_match_rate": round(invoice_match_rate, 2),
         }
